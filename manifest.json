@@ -1,0 +1,8 @@
+{
+  "name": "Entrega Smartphones PMAL",
+  "short_name": "PMAL",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#0b4ea2",
+  "theme_color": "#0b4ea2"
+}
