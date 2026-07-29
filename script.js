@@ -106,7 +106,7 @@ function mostrarBatalhoes() {
         <div class="progresso" style="width:${percentual}%"></div>
       </div>
       <div class="rodapeCard">
-        <span>${entregues} de ${total}</span>
+        <span>${entregues} de ${total} = </span>
         <strong>${percentual}%</strong>
       </div>
     `;
