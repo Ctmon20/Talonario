@@ -1,7 +1,7 @@
 //=====================================
 // CONFIGURAÇÃO
 //=====================================
-const URL_API = "https://script.google.com/macros/s/AKfycbywrdS1MwzE3VpGM2Tc7UIMuh_mNTU_aFzMBB-4e3WE93zdwAumsCbvHW0nhZpYPxA/exec";
+const URL_API = "https://script.google.com/macros/s/AKfycbyFxi0boaDMRT8Pj3bdagIQySwk9NkPkmUYLdsjqkbfL4-AsPuMtJMP5iqv3YfU0Js/exec";
 
 let dados = [];
 let batalhoes = [];
@@ -198,5 +198,39 @@ if (btnTema) {
 }
 
 if(localStorage.getItem('tema') === 'dark') document.body.classList.add('dark-mode');
+
+//=====================================
+// SALVAR OBSERVAÇÃO
+//=====================================
+const btnSalvarObs = document.getElementById("btnSalvarObs");
+if (btnSalvarObs) {
+  btnSalvarObs.onclick = async () => {
+    const textoObs = observacao ? observacao.value : "";
+    const nomeBatalhaoAtual = tituloBatalhao ? tituloBatalhao.innerHTML : "";
+    
+    // Atualiza localmente nos dados
+    const bat = batalhoes.find(b => b.batalhao === nomeBatalhaoAtual);
+    if (bat) {
+      bat.observacao = textoObs;
+      bat.imeis.forEach(i => {
+        const reg = dados.find(d => d.imei === i.imei);
+        if (reg) reg.observacao = textoObs;
+      });
+    }
+
+    // Envia para o Google Sheets atualizando o batalhão
+    if (bat && bat.imeis.length > 0) {
+      try {
+        await fetch(URL_API, { 
+          method: "POST", 
+          body: JSON.stringify({ batalhao: nomeBatalhaoAtual, observacao: textoObs }) 
+        });
+        abrirModal("✅ Observação salva com sucesso na planilha!");
+      } catch (e) {
+        abrirModal("⚠️ Erro ao salvar observação na planilha.");
+      }
+    }
+  };
+}
 
 carregarDados();
