@@ -229,3 +229,20 @@ body.dark-mode .btnCopiar:hover { background: #555; border-color: #555; }
 body.dark-mode .modal-box {
     border: 1px solid var(--borda);
 }
+.btnSalvarObs {
+  background: var(--azul);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 10px;
+  box-shadow: var(--sombra);
+  transition: opacity 0.3s;
+}
+.btnSalvarObs:hover {
+  opacity: 0.9;
+}
