@@ -327,14 +327,27 @@ if (btnAtualizar) {
 }
 
 const btnTema = document.getElementById('tema');
+
+function aplicarTemaInicial() {
+  const temaSalvo = localStorage.getItem('tema');
+  if (temaSalvo === null) {
+    document.body.classList.add('dark-mode');
+    localStorage.setItem('tema', 'dark');
+  } else if (temaSalvo === 'dark') {
+    document.body.classList.add('dark-mode');
+  } else {
+    document.body.classList.remove('dark-mode');
+  }
+}
+
+aplicarTemaInicial();
+
 if (btnTema) {
   btnTema.addEventListener('click', () => {
     document.body.classList.toggle('dark-mode');
     localStorage.setItem('tema', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
   });
 }
-
-if(localStorage.getItem('tema') === 'dark') document.body.classList.add('dark-mode');
 
 //=====================================
 // SALVAR OBSERVAÇÃO
