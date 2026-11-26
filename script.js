@@ -1,10 +1,13 @@
 //=====================================
 // CONFIGURAÇÃO
 //=====================================
-const URL_API = "https://script.google.com/macros/s/AKfycbyFxi0boaDMRT8Pj3bdagIQySwk9NkPkmUYLdsjqkbfL4-AsPuMtJMP5iqv3YfU0Js/exec";
+const URL_API = "https://script.google.com/macros/s/AKfycbyI2JkuIu-3IU5mZM8fkZQmBVzoQXWeUW5HVvR-wRjrTfkjLyTYVUoEz1jXpRS2LWs/exec";
 
 let dados = [];
 let batalhoes = [];
+let perfilSelecionado = "visualizador";
+let tokenSessao = sessionStorage.getItem("pmal_token") || "";
+let perfilUsuario = sessionStorage.getItem("pmal_perfil") || "";
 
 //=====================================
 // ELEMENTOS E MODAL
@@ -13,7 +16,6 @@ const modal = document.getElementById("meuModal");
 const modalMsg = document.getElementById("modalMensagem");
 
 function abrirModal(msg) {
-  // Alterado para innerHTML para permitir emojis e quebras de linha
   if (modalMsg) modalMsg.innerHTML = msg; 
   if (modal) modal.classList.remove("hidden");
 }
@@ -21,6 +23,12 @@ function abrirModal(msg) {
 function fecharModal() {
   if (modal) modal.classList.add("hidden");
 }
+
+const telaLogin = document.getElementById("telaLogin");
+const formLogin = document.getElementById("formLogin");
+const senhaLogin = document.getElementById("senhaLogin");
+const erroLogin = document.getElementById("erroLogin");
+const btnEntrar = document.getElementById("btnEntrar");
 
 const loading = document.getElementById("loading");
 const home = document.getElementById("home");
@@ -35,15 +43,135 @@ const localSpan = document.getElementById("local");
 const quantidadeSpan = document.getElementById("quantidade");
 const observacao = document.getElementById("observacao");
 const ultimaAtualizacao = document.getElementById("ultimaAtualizacao");
+const btnSalvarObs = document.getElementById("btnSalvarObs");
+
+function isAdmin() {
+  return perfilUsuario === "admin";
+}
+
+//=====================================
+// CONTROLE DE LOGIN E PERFIS
+//=====================================
+document.querySelectorAll(".perfil-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".perfil-tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    perfilSelecionado = btn.dataset.perfil;
+    if (erroLogin) erroLogin.classList.add("hidden");
+  });
+});
+
+function aplicarPermissoes() {
+  if (observacao) {
+    observacao.disabled = !isAdmin();
+  }
+  if (btnSalvarObs) {
+    if (isAdmin()) {
+      btnSalvarObs.classList.remove("hidden");
+    } else {
+      btnSalvarObs.classList.add("hidden");
+    }
+  }
+}
+
+function voltarParaLogin(mensagem) {
+  tokenSessao = "";
+  perfilUsuario = "";
+  sessionStorage.removeItem("pmal_token");
+  sessionStorage.removeItem("pmal_perfil");
+
+  if (home) home.classList.add("hidden");
+  if (detalhes) detalhes.classList.add("hidden");
+  if (loading) loading.classList.add("hidden");
+  if (telaLogin) telaLogin.classList.remove("hidden");
+
+  if (mensagem && erroLogin) {
+    erroLogin.textContent = mensagem;
+    erroLogin.classList.remove("hidden");
+  }
+}
+
+const btnSair = document.getElementById("btnSair");
+if (btnSair) {
+  btnSair.onclick = () => {
+    if (senhaLogin) senhaLogin.value = "";
+    voltarParaLogin();
+  };
+}
+
+if (formLogin) {
+  formLogin.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (erroLogin) erroLogin.classList.add("hidden");
+
+    const senha = senhaLogin ? senhaLogin.value : "";
+    if (!senha) return;
+
+    if (btnEntrar) {
+      btnEntrar.disabled = true;
+      btnEntrar.textContent = "Entrando...";
+    }
+
+    try {
+      const resposta = await fetch(URL_API, {
+        method: "POST",
+        body: JSON.stringify({
+          acao: "login",
+          perfil: perfilSelecionado,
+          senha: senha
+        })
+      });
+      const res = await resposta.json();
+
+      if (res.ok && res.token) {
+        tokenSessao = res.token;
+        perfilUsuario = res.perfil;
+        sessionStorage.setItem("pmal_token", tokenSessao);
+        sessionStorage.setItem("pmal_perfil", perfilUsuario);
+
+        if (telaLogin) telaLogin.classList.add("hidden");
+        aplicarPermissoes();
+        carregarDados();
+      } else {
+        if (erroLogin) {
+          erroLogin.textContent = res.erro || "Senha incorreta.";
+          erroLogin.classList.remove("hidden");
+        }
+      }
+    } catch (err) {
+      if (erroLogin) {
+        erroLogin.textContent = "Erro ao conectar com o servidor.";
+        erroLogin.classList.remove("hidden");
+      }
+    } finally {
+      if (btnEntrar) {
+        btnEntrar.disabled = false;
+        btnEntrar.textContent = "Entrar";
+      }
+    }
+  });
+}
 
 //=====================================
 // CARREGAR DADOS
 //=====================================
 async function carregarDados() {
+  if (!tokenSessao) {
+    voltarParaLogin();
+    return;
+  }
+
   if (loading) loading.classList.remove("hidden");
   try {
-    const resposta = await fetch(URL_API);
-    dados = await resposta.json();
+    const resposta = await fetch(`${URL_API}?token=${encodeURIComponent(tokenSessao)}`);
+    const json = await resposta.json();
+
+    if (json && json.erro) {
+      voltarParaLogin(json.erro);
+      return;
+    }
+
+    dados = json;
     agruparBatalhoes();
     mostrarBatalhoes();
     if (ultimaAtualizacao) ultimaAtualizacao.innerHTML = new Date().toLocaleString("pt-BR");
@@ -59,37 +187,37 @@ function agruparBatalhoes() {
   const mapa = {};
   dados.forEach(item => {
     if (!mapa[item.batalhao]) {
-      mapa[item.batalhao] = { batalhao: item.batalhao, local: item.local, observacao: item.observacao, imeis: [] };
+      mapa[item.batalhao] = { batalhao: item.batalhao, local: item.local, observacao: item.observacao, patrimonios: [] };
     }
-    mapa[item.batalhao].imeis.push(item);
+    mapa[item.batalhao].patrimonios.push(item);
   });
 
   batalhoes = Object.values(mapa);
-  batalhoes.forEach(b => { b.quantidade = b.imeis.length; });
+  batalhoes.forEach(b => { b.quantidade = b.patrimonios.length; });
   batalhoes.sort((a, b) => a.batalhao.localeCompare(b.batalhao));
   
   if (totalBatalhoes) totalBatalhoes.innerHTML = batalhoes.length;
   if (totalAparelhos) totalAparelhos.innerHTML = dados.length;
   
-  // CORREÇÃO: Adicionando de volta a atualização do contador de impressoras
   const elTotalImp = document.getElementById("totalImpressorasDashboard");
   if (elTotalImp) elTotalImp.innerHTML = dados.length;
 
   atualizarIndicadores();
 }
+
 function mostrarBatalhoes() {
   if (!listaBatalhoes) return;
   listaBatalhoes.innerHTML = "";
   batalhoes.forEach(item => {
-    const total = item.imeis.length;
-    const entregues = item.imeis.filter(i => i.entregue).length;
+    const total = item.patrimonios.length;
+    const entregues = item.patrimonios.filter(i => i.entregue).length;
     const percentual = Math.round((entregues / total) * 100);
 
     let classe = entregues == total ? "verde" : (entregues > 0 ? "amarelo" : "vermelho");
 
     const card = document.createElement("div");
     card.className = `cardBatalhao ${classe}`;
-    card.dataset.imeis = item.imeis.map(i => i.imei).join(',');
+    card.dataset.patrimonios = item.patrimonios.map(i => i.patrimonio).join(',');
     
     card.innerHTML = `
       <div class="tituloCard">
@@ -108,27 +236,31 @@ function abrirBatalhao(item) {
   if (home) home.classList.add("hidden");
   if (detalhes) detalhes.classList.remove("hidden");
   
+  aplicarPermissoes();
+
   if (tituloBatalhao) tituloBatalhao.innerHTML = item.batalhao;
   if (localSpan) localSpan.innerHTML = item.local;
   if (quantidadeSpan) quantidadeSpan.innerHTML = item.quantidade;
-  if (observacao) observacao.value = item.observacao;
+  if (observacao) observacao.value = item.observacao || "";
 
-  // CORREÇÃO: Forçando a atualização do contador de impressoras no cabeçalho de detalhes
   const elImpressoras = document.getElementById("totalImpressorasDetalhes");
   if (elImpressoras) {
-    elImpressoras.innerHTML = item.imeis.length;
+    elImpressoras.innerHTML = item.patrimonios.length;
   }
   
   if (listaIMEI) {
     listaIMEI.innerHTML = "";
-    item.imeis.forEach(obj => {
+    item.patrimonios.forEach(obj => {
       const div = document.createElement("div");
       div.className = "itemIMEI";
       const numImpressora = obj.impressora || "N/A";
+      const disabledAttr = isAdmin() ? "" : "disabled";
+      const onchangeAttr = isAdmin() ? `onchange="alterarEntrega('${obj.patrimonio}', this.checked)"` : "";
+
       div.innerHTML = `
-        <div class="cabIMEI"><input type="checkbox" ${obj.entregue ? "checked" : ""} onchange="alterarEntrega('${obj.imei}', this.checked)"></div>
-        <div class="numeroIMEI"><strong>IMEI: ${obj.imei}</strong> <span class="badge-imp">Imp: ${numImpressora}</span></div>
-        <button class="btnCopiar" onclick="copiarIMEI('${obj.imei}')">Copiar IMEI</button>
+        <div class="cabIMEI"><input type="checkbox" ${obj.entregue ? "checked" : ""} ${disabledAttr} ${onchangeAttr}></div>
+        <div class="numeroIMEI"><strong>Patrimônio: ${obj.patrimonio}</strong> <span class="badge-imp">Imp: ${numImpressora}</span></div>
+        <button class="btnCopiar" onclick="copiarPatrimonio('${obj.patrimonio}')">Copiar Patrimônio</button>
       `;
       listaIMEI.appendChild(div);
     });
@@ -140,15 +272,15 @@ if (pesquisa) {
     const texto = this.value.toLowerCase();
     document.querySelectorAll(".cardBatalhao").forEach(card => {
       const nome = card.innerText.toLowerCase();
-      const imeis = (card.dataset.imeis || "").toLowerCase();
-      card.style.display = (nome.includes(texto) || imeis.includes(texto)) ? "block" : "none";
+      const patrimonios = (card.dataset.patrimonios || "").toLowerCase();
+      card.style.display = (nome.includes(texto) || patrimonios.includes(texto)) ? "block" : "none";
     });
   });
 }
 
-function copiarIMEI(imei) {
-  navigator.clipboard.writeText(imei);
-  abrirModal("✅ IMEI copiado com sucesso!<br>Agora é só colar.");
+function copiarPatrimonio(patrimonio) {
+  navigator.clipboard.writeText(patrimonio);
+  abrirModal("✅ Patrimônio copiado com sucesso!<br>Agora é só colar.");
 }
 
 const btnVoltar = document.getElementById("voltar");
@@ -156,16 +288,18 @@ if (btnVoltar) {
   btnVoltar.onclick = () => {
     if (detalhes) detalhes.classList.add("hidden");
     if (home) home.classList.remove("hidden");
+    mostrarBatalhoes();
   };
 }
 
 function mostrarToast(msg) { abrirModal(msg); }
 
-function alterarEntrega(imei, status) {
-  const registro = dados.find(x => x.imei == imei);
+function alterarEntrega(patrimonio, status) {
+  if (!isAdmin()) return;
+  const registro = dados.find(x => x.patrimonio == patrimonio);
   if (!registro) return;
   registro.entregue = status;
-  atualizarGoogleSheets(imei, status);
+  atualizarGoogleSheets(patrimonio, status);
   atualizarIndicadores();
 }
 
@@ -177,8 +311,11 @@ function atualizarIndicadores() {
   if (elPendentes) elPendentes.innerHTML = dados.length - entregues;
 }
 
-async function atualizarGoogleSheets(imei, status) {
-  await fetch(URL_API, { method: "POST", body: JSON.stringify({ imei, entregue: status }) });
+async function atualizarGoogleSheets(patrimonio, status) {
+  await fetch(URL_API, {
+    method: "POST",
+    body: JSON.stringify({ token: tokenSessao, patrimonio, entregue: status })
+  });
 }
 
 const btnAtualizar = document.getElementById("atualizar");
@@ -202,28 +339,26 @@ if(localStorage.getItem('tema') === 'dark') document.body.classList.add('dark-mo
 //=====================================
 // SALVAR OBSERVAÇÃO
 //=====================================
-const btnSalvarObs = document.getElementById("btnSalvarObs");
 if (btnSalvarObs) {
   btnSalvarObs.onclick = async () => {
+    if (!isAdmin()) return;
     const textoObs = observacao ? observacao.value : "";
     const nomeBatalhaoAtual = tituloBatalhao ? tituloBatalhao.innerHTML : "";
     
-    // Atualiza localmente nos dados
     const bat = batalhoes.find(b => b.batalhao === nomeBatalhaoAtual);
     if (bat) {
       bat.observacao = textoObs;
-      bat.imeis.forEach(i => {
-        const reg = dados.find(d => d.imei === i.imei);
+      bat.patrimonios.forEach(i => {
+        const reg = dados.find(d => d.patrimonio === i.patrimonio);
         if (reg) reg.observacao = textoObs;
       });
     }
 
-    // Envia para o Google Sheets atualizando o batalhão
-    if (bat && bat.imeis.length > 0) {
+    if (bat && bat.patrimonios.length > 0) {
       try {
         await fetch(URL_API, { 
           method: "POST", 
-          body: JSON.stringify({ batalhao: nomeBatalhaoAtual, observacao: textoObs }) 
+          body: JSON.stringify({ token: tokenSessao, batalhao: nomeBatalhaoAtual, observacao: textoObs }) 
         });
         abrirModal("✅ Observação salva com sucesso na planilha!");
       } catch (e) {
@@ -233,4 +368,8 @@ if (btnSalvarObs) {
   };
 }
 
-carregarDados();
+if (tokenSessao && perfilUsuario) {
+  if (telaLogin) telaLogin.classList.add("hidden");
+  aplicarPermissoes();
+  carregarDados();
+}
